@@ -1,47 +1,47 @@
 const express = require('express')
 const router = express.Router()
-
+const conn = require('../mariadb')
 
 router.use(express.json()) 
-
-let db = new Map()
-var id = 1
 
 router
     .route('/')
     .get((req, res) => {
-        var {userId} = req.body
-        var channels = []
+        var {user_id} = req.body
 
-        if(db.size && userId){
-
-            db.forEach(function(value, key) {
-                if (value.userId === userId) 
-                    channels.push(value)
-            })
-
-            if(channels.length){
-                res.status(200).json(channels)
-            }
-            else {
-                NotFoundChannel()
-            }
+        let sql = `SELECT * FROM channels WHERE user_id= ?`
+        if(user_id){
+            conn.query(sql, user_id,
+                function (err, results) {
+                    if(results.length){
+                        res.status(200).json(results)
+                        res.end()
+                    } else {
+                        notFoundChannel(res)
+                    }
+                }
+            )
         } else {
-            NotFoundChannel()
+            res.status(400).end()
         }
     })
 
     .post((req, res) => {
-        if (req.body.channeltitle) {
-            let channel =req.body
-            db.set(id++, channel)
+        const {name, user_id} = req.body
+        if (name && user_id) {
 
-            res.status(201).json({
-            message : `${db.get(id-1).channeltitle}채널을 응원합니다!`
-            })
+            let sql = `INSERT INTO channels (name, user_id)
+                    values (?, ?)`
+            let values = [name, user_id]
+
+            conn.query(sql, values,
+                function (err, results, fields) {
+                    res.status(201).json(results)
+                }
+            )
         } else {
             res.status(400).json({
-                message : "채널명을 확인해주세요!"
+                message : "요청 값을 제대로 보내주세요."
             })
         }
     })
@@ -52,13 +52,18 @@ router
         let {id} = req.params
         id = parseInt(id)
 
-        var channel = db.get(id)
-        if(channel){
-            res.status(200).json(channel)
-        } else {
-            NotFoundChannel()
-        }
+        let sql = `SELECT * FROM channels WHERE id = ?`
+        conn.query(sql,id, 
+            function(err, results) {
+                if(results.length){
+                    res.status(200).json(results)
+                }else {
+                    notFoundChannel(res)
+                }
+            }
+        )
     })
+
     .put((req, res) => {
         let {id} = req.params
         id = parseInt(id)
@@ -74,7 +79,7 @@ router
                 message : `채널명이 정상적으로 수정되었습니다. 기존${oldtitle}에서 -> 수정${newTitle}로 변경`
             })
         } else {
-            NotFoundChannel()
+            notFoundChannel()
         }
     })
 
@@ -93,7 +98,7 @@ router
         }
     })
 
-function notFoundChannel() {
+function notFoundChannel(res) {
     res.status(404).json({
         message : "채널 정보를 찾을 수 없습니다."
     })
